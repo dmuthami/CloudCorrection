@@ -21,6 +21,7 @@ Configurations_cat_logfile = ""
 
 #Workspace global variables
 Configurations_workspace = ""
+Configurations_imagesfolder = ""
 
 def setParameters(configFileLocation):
 
@@ -45,6 +46,10 @@ def setWorkspace():
     #read workspace location from Config file location
     global Configurations_workspace # Needed to modify global copy of Configurations_workspace
     Configurations_workspace = Configurations_Config.get('Workspace', 'workspace')
+
+    #read images folder from Config file location
+    global Configurations_imagesfolder # Needed to modify global copy of Configurations_imagesfolder
+    Configurations_imagesfolder = Configurations_Config.get('Workspace', 'imagesfolder')
 
     return ""
 
