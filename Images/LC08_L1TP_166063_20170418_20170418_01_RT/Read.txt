@@ -1,0 +1,1 @@
+download from USGS Explorer the GeoTIFF images for the file LC08_L1TP_166063_20170418_20170418_01_RT
