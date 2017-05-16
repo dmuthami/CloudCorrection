@@ -3,10 +3,10 @@
 # Name:        Configurations
 # Purpose:
 #
-# Author:      dmuthami
+# Author:      Maithya
 #
 # Created:     29/09/2014
-# Copyright:   (c) dmuthami 2014
+# Copyright:   (c) Maithya 2014
 # Licence:     GPL
 #-------------------------------------------------------------------------------
 import ConfigParser

@@ -66,6 +66,7 @@ try:
                 directory = paramList[1]
                 fileName =  paramList[0]
                 reflectanceImage = Raster(os.path.join(directory, fileName))*float(paramList[5]) + float(paramList[6])
+                #reflectanceImage = Raster(os.path.join(directory, fileName))*0.00002 -0.1
                 ## Save the output
                 #Call function to check if "os.path.isdir"
                 outputDirectory = os.path.join(directory, "Reflectance")

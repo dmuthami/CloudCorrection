@@ -2,10 +2,10 @@
 # Name:        module1
 # Purpose:
 #
-# Author:      dmuthami
+# Author:      Maithya
 #
 # Created:     27/04/2017
-# Copyright:   (c) dmuthami 2017
+# Copyright:   (c) Maithya 2017
 # Licence:     Free
 #-------------------------------------------------------------------------------
 import arcpy
