@@ -67,6 +67,9 @@ def interpolate():
                 #Look for another cell(r,c) with the same DN value within a radius/threshold of 12 cells
                 #Return the cell row and column
                 returnList = makeSpiralSearchinMatrix(arrRadar,m,n,12,DN_value_radar_image)
+                if returnList[0] !=0:
+                    print (" Old DN Value : {0} Old Row : {1} Old Col : {2} |  New DN Value : {3} \n New Row : {4} \n New Col : {5} ".\
+                    format(DN_value_radar_image,m,n,paramList[0],paramList[1],paramList[2]))
                 print returnList
                 #Set the DN of the current cell C(m,n) to inRas(r,c)
                 #arr.item(m,n) = returnList[0]
@@ -78,10 +81,10 @@ def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_radar_image):
     try:
         threshold = length - 1;
         rowStart=row-threshold;
-        rowLength=threshold;
+        rowLength=(2 * threshold) + rowStart;
 
         colStart=col - threshold
-        colLength = threshold;
+        colLength = (2 * threshold) + colStart;
 
         while (rowStart <= rowLength and  colStart <= colLength):
             #Top Boundary
