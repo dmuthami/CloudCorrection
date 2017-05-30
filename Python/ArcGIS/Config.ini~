@@ -2,6 +2,7 @@
 workspace: /home/geonode/Documents/Landsat
 imagesfolder :  /home/geonode/Documents/Landsat
 excludefolder : Reflectance
+trrifolder :  /home/geonode/Documents/Landsat
 
 [Arguments]
 textfilesuffix : _MTL.txt

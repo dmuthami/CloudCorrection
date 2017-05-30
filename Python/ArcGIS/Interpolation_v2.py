@@ -8,13 +8,11 @@
 # Copyright:   (c) Maithay 2017
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
-import arcpy
 import os,sys
 import logging
 import traceback
-from arcpy import env
-from arcpy.sa import *
-import numpy
+import numpy as np
+from osgeo import gdal
 
 ##Custom module containing functions
 import Configurations
@@ -30,7 +28,7 @@ logger.setLevel(logging.INFO)
 
 #Set-up Error Logging
 logger_error = logging.getLogger('myError')
-Configurations.Configurations_cloudCorrection_error_logfile = os.path.join(os.path.dirname(__file__), 'cloudCorrecttion_error_logfile.log')
+Configurations.Configurations_cloudCorrection_error_logfile = os.path.join(os.path.dirname(__file__), 'cloudCorrection_error_logfile.log')
 hdlr_error = logging.FileHandler(Configurations.Configurations_cloudCorrection_error_logfile)
 #formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 hdlr_error.setFormatter(formatter)
@@ -40,47 +38,104 @@ logger_error.setLevel(logging.INFO)
 ##Obtain script parameter values
 ##location for configuration file
 ##Acquire it as a parameter either from terminal, console or via application
-configFileLocation=arcpy.GetParameterAsText(0)#Get from console or GUI being user input
-if configFileLocation =='': #Checks if supplied parameter is null
-    #Defaults to below hard coded path if the parameter is not supplied. NB. May throw exceptions if it defaults to path below
-    # since path below might not  be existing in your system with the said file name required
-    configFileLocation=r"E:\GIS Data\DAVVOC\Maithya\Python\ArcGIS\Config.ini"
+if len(sys.argv)>1:
+    configFileLocation=sys.argv[1]##Get from console or GUI being user input
+else :
+    #Read from config file
+    configFileLocation=r"/home/geonode/Documents/Python/ArcGIS/Config.ini"
 
 ##Read from config file
 #If for any reason an exception is thrown here then subsequent code will not be executed
 Configurations.setParameters(configFileLocation)
 
-#Set workspace
+#Set workspace and other parameters
 Configurations.setWorkspace()
-#env.workspace = Configurations.Configurations_workspace
-env.workspace = r"E:\GIS Data\DAVVOC\Maithya\Images\LC08_L1TP_166063_20170112_20170311_01_T1\Reflectance"
 
-# Set environment settings
-arcpy.env.overwriteOutput = True
+#Path to the interpolation folder
+_path = r"/home/geonode/Documents/Images"
 
-# Check out the ArcGIS Spatial Analyst extension license
-arcpy.CheckOutExtension("Spatial")
+##Gather information from the original file
+##Store it in this global variables      
+_cols = 0
+_rows = 0
+_proj = ""
+_trans = ""
+_nodatav = ""
+_outFile = ""
 
+def save_image( npdata, outfilename ) :
+    try:
+        #Create file using information from Original File
+        rasterFilePath = os.path.join(_path, outfilename)
+        outDrive = gdal.GetDriverByName("GTiff")  
+        outRaster = outDrive.Create(str(rasterFilePath),_rows_cols_,1,gdal.GDT_Float64)
+
+        #Write array to the file
+        outRaster.GetRasterBand(1).WriteArray(npdata)
+
+        #Seta no data value
+        outRaster.GetRasterBand(1).SetNoDataValue(_nodatav)
+
+        #GeoReference the image
+        outRaster.SetGeoTransform(_trans)
+
+        #Write projection information
+        outRaster.SetProjection(_proj)
+        
+    except:
+        ## Return any Python specific errors and any error returned
+        tb = sys.exc_info()[2]
+        tbinfo = traceback.format_tb(tb)[0]
+
+        pymsg = "PYTHON ERRORS:\n  Function save_image( npdata, outfilename) \n" + tbinfo + "\nError Info:\n    " + \
+                str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
+        ##Write to the error log file
+        logger_error.info( pymsg)
+
+def load_image3( infilename) :
+
+    try:
+        ds = gdal.Open(infilename)
+        band = ds.GetRasterBand(1)
+        channel = np.array(band.ReadAsArray())
+        _rows = channel.shape[0] #Original rows
+        _cols = channel.shape[1] #Original cols
+        _trans = ds.GetGeoTransform() #Get transformation information from the original file
+        _proj = ds.GetProjection() #Get Projection Information
+        _nodatav = band.GetNoDataValue() # Get No Data Value
+        
+        logger.info("Image shape : {0}  Type : {1}".format(channel.shape,channel.dtype))
+        
+        return channel #Return Numpy Array
+    except:
+        ## Return any Python specific errors and any error returned
+        tb = sys.exc_info()[2]
+        tbinfo = traceback.format_tb(tb)[0]
+
+        pymsg = "PYTHON ERRORS:\n  Function def load_image( infilename ) \n" + tbinfo + "\nError Info:\n    " + \
+                str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
+        ##Write to the error log file
+        logger_error.info(pymsg)
+        return ""
 
 def interpolate():
     try:
-        inOpticalImage = Raster("TRRI_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
-        inRadar = Raster("Radar.TIF")
-        inCloud = Raster("cloud_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        inOpticalImage = os.path.join(_path, "TRRI_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        inRadar = os.path.join(_path, "Radar.TIF")
+        inCloud = os.path.join(_path, "cloud_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
 
         ## Convert Rasters to respective numpy arrays
-        arrOptical = arcpy.RasterToNumPyArray(inOpticalImage)
-        arrRadar =arcpy.RasterToNumPyArray(inRadar)
-        arrCloud =arcpy.RasterToNumPyArray(inCloud)
-
-        #Get raster properties from the
-        lowerLeft = arcpy.Point(inOpticalImage.extent.XMin,inOpticalImage.extent.YMin)
-        cellSize = inOpticalImage.meanCellWidth
+        arrOptical = load_image3(inOpticalImage)
+        arrRadar =load_image3(inRadar)
+        arrCloud =load_image3(inCloud)
 
 
         ##This will get you the number of rows and columns in your array for the cloud image
         ##Image has 1, 0 representing cloud and non-cloud pixels respectively
-        (max_rows, max_cols) = arrCloud.shape
+        #(max_rows, max_cols,bv) = arrCloud.shape
+        _tuple =arrCloud.shape
+        max_rows=_tuple[0]
+        max_cols=_tuple[1]
 
         ## Loop thru all the cells in the cloud array
         ## Check for cell values that are 1 and ignore the onces that are zero
@@ -98,15 +153,16 @@ def interpolate():
                     if returnList[0] !=0:
                         #Set current DN value of optical image to new DN value for the returned q,r row
                         arrOptical[m,n] = arrOptical[returnList[1],returnList[2]]
-                        logger.info(" OGN DN Value : {0} Old Row : {1} Old Col : {2} |  New DN Value : {3}  New Row : {4}  New Col : {5} ".\
+                        logger.info("OGN DN Value : {0} Old Row : {1} Old Col : {2} |  New DN Value : {3}  New Row : {4}  New Col : {5} ".\
                         format(DN_value_optical_image,m,n,returnList[0],returnList[1],returnList[2]))
 
                     #print returnList
 
-        ##Write new cloud corrected optical image
         ##Convert Array to raster (keep the origin and cellsize the same as the input)
-        newRaster = arcpy.NumPyArrayToRaster(arrOptical,lowerLeft,cellSize,value_to_nodata=0)
-        newRaster.save("CC_TRRI_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+
+        _outFile = "outputfile.tif" #Get the file name from the infilename
+        save_image( arrOptical, _outFile )
+        
     except:
         ## Return any Python specific errors and any error returned
         tb = sys.exc_info()[2]

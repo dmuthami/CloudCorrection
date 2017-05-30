@@ -17,7 +17,8 @@ import traceback
 import logging
 
 #Workspace global variables
-Configurations_cat_logfile = ""
+Configurations_cloudCorrection_logfile = ""
+Configurations_cloudCorrection_error_logfile = ""
 
 #Workspace global variables
 Configurations_workspace = ""

@@ -3,26 +3,45 @@
 # Requirements: Spatial Analyst Extension
 # Import system modules
 import os, sys
-import arcpy
+import logging
 import traceback
-from arcpy import env
-from arcpy.sa import *
+import numpy as np
+from osgeo import gdal
 
 ##Custom module containing functions
 import Configurations
 import GetImageFolders
 import Utilities
+import WriteRaster
 
 try:
 
+    #Set-up logging
+    logger = logging.getLogger('myapp')
+    Configurations.Configurations_cloudCorrection_logfile = os.path.join(os.path.dirname(__file__), 'cloudCorrection_logfile.log')
+    hdlr = logging.FileHandler(Configurations.Configurations_cloudCorrection_logfile)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr)
+    logger.setLevel(logging.INFO)
+
+    #Set-up Error Logging
+    logger_error = logging.getLogger('myError')
+    Configurations.Configurations_cloudCorrection_error_logfile = os.path.join(os.path.dirname(__file__), 'cloudCorrecttion_error_logfile.log')
+    hdlr_error = logging.FileHandler(Configurations.Configurations_cloudCorrection_error_logfile)
+    #formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    hdlr_error.setFormatter(formatter)
+    logger_error.addHandler(hdlr_error)
+    logger_error.setLevel(logging.INFO)
+    
     ##Obtain script parameter values
     ##location for configuration file
     ##Acquire it as a parameter either from terminal, console or via application
-    configFileLocation=arcpy.GetParameterAsText(0)#Get from console or GUI being user input
-    if configFileLocation =='': #Checks if supplied parameter is null
-        #Defaults to below hard coded path if the parameter is not supplied. NB. May throw exceptions if it defaults to path below
-        # since path below might not  be existing in your system with the said file name required
-        configFileLocation=r"E:\GIS Data\DAVVOC\Maithya\Python\ArcGIS\Config.ini"
+    if len(sys.argv)>1:
+        configFileLocation=sys.argv[1]##Get from console or GUI being user input
+    else :
+        #Read from config file
+        configFileLocation=r"/home/geonode/Documents/Python/ArcGIS/Config.ini"
 
     ##Read from config file
     #If for any reason an exception is thrown here then subsequent code will not be executed
@@ -30,53 +49,60 @@ try:
 
     #Set workspace
     Configurations.setWorkspace()
-    env.workspace = Configurations.Configurations_workspace
-
-    # Set environment settings
-    arcpy.env.overwriteOutput = True
-
-    # Check out the ArcGIS Spatial Analyst extension license
-    arcpy.CheckOutExtension("Spatial")
-
-    ##Get all directories
-    #GetImageFolders.getAllFolders(Configurations.Configurations_workspace);
-
+    
     ##Get all raster files
-    _rasterFiles = GetImageFolders.getAllRasters(Configurations.Configurations_imagesfolder,\
-    Configurations.Configurations_excludefolder);
+    arr = GetImageFolders.ouputRasterArray(Configurations.Configurations_imagesfolder,\
+    Configurations.Configurations_excludefolder)
+    ##print arr
 
-    ##Loop through the raster list and print the file name
-    for ras in _rasterFiles:
-        ##Get respective metadata file
-        paramList = Utilities.getGainAndOffset(os.path.basename(ras),os.path.dirname(ras),Configurations.Configurations_textfilesuffix)
-        ##paramList as follows
-        ## basename: 0
-        ## directoryName : 1
-        ## fileExtension : 2
-        ## bandNumber : 3
-        ## textfile for metadata : 4
-        ## gain : 5
-        ## offset :6
+    ##Get the numer of rows and columns
+    (max_rows, max_cols) = arr.shape
+    for m in range (0, max_rows):
+        dir = arr[m,1]
+        file = arr[m,0]
+        #print dir
+        #print file
+        paramList = Utilities.getGainAndOffset(file,\
+                                               dir,\
+                                               Configurations.Configurations_textfilesuffix)
         if paramList!= []:
-            ##Conduct reflectance but safely using error handling methods
-            ##??' = M?Qcal + A?
             outputDirectory="";
             try:
                 ##Compute reflectance image
                 directory = paramList[1]
                 fileName =  paramList[0]
-                reflectanceImage = Raster(os.path.join(directory, fileName))*float(paramList[5]) + float(paramList[6])
-                #reflectanceImage = Raster(os.path.join(directory, fileName))*0.00002 -0.1
-                ## Save the output
-                #Call function to check if "os.path.isdir"
+
+                #dataset
+                ds = gdal.Open(os.path.join(directory, fileName))
+                band = ds.GetRasterBand(1)
+                #raw image data
+                npdata = np.array(band.ReadAsArray())
+                
+                #Processed image data
+                npReflectance = npdata*float(paramList[5]) + float(paramList[6])
+
+                ##Save the Reflectance output to TIFF file
                 outputDirectory = os.path.join(directory, "Reflectance")
                 Utilities.checkIfDirectoryExists(outputDirectory)
-                reflectanceImageSeq = os.path.join(outputDirectory, "Reflectance_" + fileName)
-                reflectanceImage.save(reflectanceImageSeq)
-                print ("---------------")
-                print (" Raster Input : {0} \n Dir : {1} \n Extension : {2} \n Band No : {3} \n Txt F.Name : {4} \n Gain : {5} \n Offset : {6} \n Reflectance Image : {7}".\
-                format(paramList[0],paramList[1],paramList[2],paramList[3],paramList[4],paramList[5],paramList[6],reflectanceImageSeq))
-                print ("---------------")
+                outputRasterFile = os.path.join(outputDirectory, "Reflectance_" + fileName)
+
+                
+                rows = npdata.shape[0] #Original rows
+                cols = npdata.shape[1] #Original cols
+                trans = ds.GetGeoTransform() #Get transformation information from the original file
+                proj = ds.GetProjection() #Get Projection Information
+                nodatav = band.GetNoDataValue() # Get No Data Value
+
+                #Save Image
+                WriteRaster.writeTIFF(ds,rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile)
+                
+                logger.info("---------------")
+                logger.info (" Raster Input : {0} \n Dir : {1} \n Extension : {2} \n Band No : {3} \n Txt F.Name : {4} \n Gain : {5} \n Offset : {6} \n Reflectance Image : {7}".\
+                format(paramList[0],paramList[1],\
+                       paramList[2],paramList[3],paramList[4],\
+                       paramList[5],paramList[6],\
+                       outputRasterFile))
+                logger.info ("---------------")                
             except:
                 ## Return any Python specific errors and any error returned by the geoprocessor
                 ##
@@ -84,20 +110,12 @@ try:
                 tbinfo = traceback.format_tb(tb)[0]
                 pymsg = "PYTHON ERRORS:\n Main FunctionTraceback Info:\n" + tbinfo + "\nError Info:\n    " + \
                         str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
-                msgs = "Geoprocesssing  Errors :\n" + arcpy.GetMessages(2) + "\n"
-
-                ##dd custom informative message to the Python script tool
-                arcpy.AddError(pymsg) #Add error message to the Python script tool(Progress dialog box, Results windows and Python Window).
-                arcpy.AddError(msgs)  #Add error message to the Python script tool(Progress dialog box, Results windows and Python Window).
 
                 ##For debugging purposes only
                 ##To be commented on python script scheduling in Windows
                 print pymsg
-                print "\n" +msgs
+        
 
-        ##Get REFLECTANCE_MULT_BAND_x and REFLECTANCE_ADD_BAND_x
-
-    print "Success : Perfect in Every Other Way"
 except:
     ## Return any Python specific errors and any error returned by the geoprocessor
     ##
@@ -105,13 +123,7 @@ except:
     tbinfo = traceback.format_tb(tb)[0]
     pymsg = "PYTHON ERRORS:\n Main FunctionTraceback Info:\n" + tbinfo + "\nError Info:\n    " + \
             str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
-    msgs = "Geoprocesssing  Errors :\n" + arcpy.GetMessages(2) + "\n"
-
-    ##dd custom informative message to the Python script tool
-    arcpy.AddError(pymsg) #Add error message to the Python script tool(Progress dialog box, Results windows and Python Window).
-    arcpy.AddError(msgs)  #Add error message to the Python script tool(Progress dialog box, Results windows and Python Window).
 
     ##For debugging purposes only
     ##To be commented on python script scheduling in Windows
     print pymsg
-    print "\n" +msgs
