@@ -13,6 +13,7 @@ import logging
 import traceback
 import numpy as np
 from osgeo import gdal
+from gdalconst import *
 from datetime import datetime
 
 
@@ -70,6 +71,26 @@ _nodatav = ""
 #you can change the printing options using set_printoptions.
 #np.set_printoptions(threshold='nan')
 
+def getImage(infilename,readOnly):
+    try:
+        if (readOnly==True):
+            ds = gdal.Open(infilename,GA_ReadOnly)
+        else:
+            ds = gdal.Open(infilename,GA_Update) 
+            
+               
+        return ds #Return dataset
+    except:
+        ## Return any Python specific errors and any error returned
+        tb = sys.exc_info()[2]
+        tbinfo = traceback.format_tb(tb)[0]
+
+        pymsg = "PYTHON ERRORS:\n  Function def load_image( infilename ) \n" + tbinfo + "\nError Info:\n    " + \
+                str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
+        ##Write to the error log file
+        logger_error.info(pymsg)    
+        return ""
+    
 def load_image3( infilename) :
 
     try:
@@ -102,88 +123,65 @@ def load_image3( infilename) :
 def interpolate():
     try:
         
-        inRadar = os.path.join(_path, "Radar.TIF")
-        inCloud = os.path.join(_path, "Cloud_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
-        inOpticalImage = os.path.join(_path, "TRRI_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        radarPath = os.path.join(_path, "Radar.TIF")
+        cloudPath = os.path.join(_path, "Cloud_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        opticalPath = os.path.join(_path, "TRRI_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
 
-        ## Convert Rasters to respective numpy arrays
-        arrOptical = load_image3(inOpticalImage)
-        arrRadar =load_image3(inRadar)
-        arrCloud =load_image3(inCloud)
+        radarImage = getImage(radarPath,True)
+        cloudImage = getImage(cloudPath, True)
+        opticalImage = getImage(opticalPath,True)
 
-        inRadar = None
-        inCloud = None
-        inOpticalImage = None
-        ##This will get you the number of rows and columns in your array for the cloud image
-        ##Image has 1, 0 representing cloud and non-cloud pixels respectively
-        #(max_rows, max_cols,bv) = arrCloud.shape
-        _tuple =arrCloud.shape
-        max_rows=_tuple[0]
-        max_cols=_tuple[1]
-
-        logger.info("Radar Array : "+str(arrRadar.shape)+"  Type : "+str(arrRadar.dtype))
-        logger.info("Cloud Array : "+str(arrCloud.shape)+"  Type : "+str(arrCloud.dtype))
-        logger.info("Optical Array : "+str(arrOptical.shape)+"  Type : "+str(arrOptical.dtype))
-       
-        #Get all cloud pixels
-        #logger.info(arrCloud)
-
-        ##Convert arrCloud
-        arrCloudCopy = np.copy(arrCloud)
-        arrCloudCopy[arrCloudCopy==1]=99 #convert 1 to 99
-        arrCloudCopy[arrCloudCopy==0]=1 #convert 0 to 1
-        arrCloudCopy[arrCloudCopy==99]=0#Convert 99 to 0
-        ##Cloud pixels is now 0
-        #Exclude the same cloud pixels from the radar image
-        arrRadar2 = np.copy(arrRadar)
-        arrRadar2 = arrRadar2*arrCloudCopy
         
-        #Convert 0. to 999.
-        arrRadar2[arrRadar2==0.]=999.
-        arrCloudCopy=None#free memory
-        
-        
-        #Replace cloud pixels with those that are not cloudy from the radar image
-        print datetime.now().strftime("-%y-%m-%d_%H-%M-%S")
-        y =0
-        str_list=[]
-        it = np.nditer(arrCloud,flags=['multi_index'])
-        while not it.finished:
-            #str_list.append("%d <%s>" %(it[0],it.multi_index)),
-            if it[0]==1:#Cloud pixel
-                m = it.multi_index[0]
-                n = it.multi_index[1]
-                DN_value_optical_image = arrRadar.item(m,n) #Get DN value from radar image
-                ## Look for another cell(r,c) in the radar image with the same DN value within a radius/threshold of x cells
-                ## Currently x = 100 ad is paased as an argument
-                ## The radar image to search is the one we have excluded the cloudy pixels
-                ## Return the cell row and column
-                returnList = makeSpiralSearchinMatrix(arrRadar2,m,n,100,DN_value_optical_image)# for now the threshold is 3 pixels
-                if returnList[0] !=0:
-                    #Set current DN value of optical image to new DN value for the returned q,r row
-                    arrOptical[m,n] = arrOptical[returnList[1],returnList[2]]
-                    #logger.info("OGN DN Value : {0} Old Row : {1} Old Col : {2} |  New DN Value : {3}  New Row : {4}  New Col : {5} ".\
-                    #format(DN_value_optical_image,m,n,returnList[0],returnList[1],returnList[2]))
-                #else:
-                    #logger.info("---(Row,Col) = "+str(m)+","+str(n)+"--Null Return List : "+str(returnList))
-            y = y+1
-            print(y)
-            it.iternext()
-        print y
-        print datetime.now().strftime("-%y-%m-%d_%H-%M-%S")
-        print "Completed raster analysis"
-        #strOutput =''.join(str_list)
-        logger.info(strOutput)
 
+        #Get No datavalue for the optical image
+        band = opticalImage.GetRasterBand(1)
+        opticalArr = np.array(band.ReadAsArray())
+        global _rows
+        _rows = opticalArr.shape[0] #Original rows
+        global _cols
+        _cols = opticalArr.shape[1] #Original cols
+        global _trans
+        _trans = opticalImage.GetGeoTransform() #Get transformation information from the original file
+        global _proj
+        _proj = opticalImage.GetProjection() #Get Projection Information
+                
+        global _nodatav
+        _nodatav = band.GetNoDataValue() # Get No Data Value
+        if(_nodatav==None):
+            _nodatav = -999.
+
+        #Multiply cloud pixel (cloudArr) with no data value -999= cloudArr2
+        cloudBand = cloudImage.GetRasterBand(1)
+        cloudArr = np.array(cloudBand.ReadAsArray())    
+        cloudArr2 = cloudArr*-999
+
+        #Add cloudArr2 to the opticalArr to give opticalArr2
+        opticalArr2 = cloudArr2 + opticalArr
+        opticalArr2[opticalArr2<-900]=-999.  #Replace all values < -900 with -999
         
         ##Convert Array to raster (keep the origin and cellsize the same as the input)
-        global _rows        
-        global _cols        
-        global _trans        
-        global _proj        
-        global _nodatav
+        ##Remeber NoDatavalue = -999 or -999.0
+        outputRasterFile = os.path.join(_path, "TRRI2_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        WriteRaster.writeTIFF(_rows,_cols,_trans,_proj,_nodatav,opticalArr2,outputRasterFile)
+
+        ##Create a copy of opticalArr2 
         outputRasterFile = os.path.join(_path, "CloudFree_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
-        WriteRaster.writeTIFF(_rows,_cols,_trans,_proj,_nodatav,arrOptical,outputRasterFile)
+        WriteRaster.writeTIFF(_rows,_cols,_trans,_proj,_nodatav,opticalArr2,outputRasterFile)
+        
+        #Read the image again
+        #Execute fillnodata
+        opticalPath2 = os.path.join(_path, "CloudFree_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        opticalImage2 = getImage(opticalPath,False)
+        channelband = opticalImage2.GetRasterBand(1)        
+        result = gdal.FillNodata(targetBand = channelband, maskBand = None, \
+                                 maxSearchDist = 1000, smoothingIterations =0)
+
+        result = None #Flush out the results to disk
+        
+        radarImage = None
+        cloudImage = None
+        opticalImage = None
+        
                        
     except:
         ## Return any Python specific errors and any error returned

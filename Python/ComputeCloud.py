@@ -106,8 +106,8 @@ def computeCloud():
         WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,npTRRI,outputRasterFile)
 
     
-        npTRRI[npTRRI<1.3]=0.  #Repalce all values < 1.0 with 0.0
-        npTRRI[npTRRI>=1.3]=1.  #Repalce all values >= 1.0 with 1.0
+        npTRRI[npTRRI<1.3]=0.  #Replace all values < 1.3 with 0.0
+        npTRRI[npTRRI>=1.3]=1.  #Replace all values >= 1.3 with 1.0
                
         #Convert to unsigned 8 bit
         npCloud =  npTRRI.astype(int)
