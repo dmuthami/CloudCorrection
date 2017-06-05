@@ -5,7 +5,7 @@
 # Author:      Maithya
 #
 # Created:     16/05/2017
-# Copyright:   (c) Maithay 2017
+# Copyright:   (c) Maithya 2017
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 import os,sys
@@ -13,9 +13,13 @@ import logging
 import traceback
 import numpy as np
 from osgeo import gdal
+from datetime import datetime
+
+
 
 ##Custom module containing functions
 import Configurations
+import WriteRaster
 
 #Set-up logging
 logger = logging.getLogger('myapp')
@@ -42,7 +46,7 @@ if len(sys.argv)>1:
     configFileLocation=sys.argv[1]##Get from console or GUI being user input
 else :
     #Read from config file
-    configFileLocation=r"/home/geonode/Documents/Python/ArcGIS/Config.ini"
+    configFileLocation=os.path.join(os.path.dirname(__file__), 'Config.ini')
 
 ##Read from config file
 #If for any reason an exception is thrown here then subsequent code will not be executed
@@ -52,7 +56,7 @@ Configurations.setParameters(configFileLocation)
 Configurations.setWorkspace()
 
 #Path to the interpolation folder
-_path = r"/home/geonode/Documents/Images"
+_path = r"/home/geonode/Documents/Landsat/LC08_L1TP_166063_20170112_20170311_01_T1/Reflectance"
 
 ##Gather information from the original file
 ##Store it in this global variables      
@@ -61,36 +65,10 @@ _rows = 0
 _proj = ""
 _trans = ""
 _nodatav = ""
-_outFile = ""
 
-def save_image( npdata, outfilename ) :
-    try:
-        #Create file using information from Original File
-        rasterFilePath = os.path.join(_path, outfilename)
-        outDrive = gdal.GetDriverByName("GTiff")  
-        outRaster = outDrive.Create(str(rasterFilePath),_rows_cols_,1,gdal.GDT_Float64)
-
-        #Write array to the file
-        outRaster.GetRasterBand(1).WriteArray(npdata)
-
-        #Seta no data value
-        outRaster.GetRasterBand(1).SetNoDataValue(_nodatav)
-
-        #GeoReference the image
-        outRaster.SetGeoTransform(_trans)
-
-        #Write projection information
-        outRaster.SetProjection(_proj)
-        
-    except:
-        ## Return any Python specific errors and any error returned
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-
-        pymsg = "PYTHON ERRORS:\n  Function save_image( npdata, outfilename) \n" + tbinfo + "\nError Info:\n    " + \
-                str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
-        ##Write to the error log file
-        logger_error.info( pymsg)
+#To disable this behaviour and force NumPy to print the entire array, 
+#you can change the printing options using set_printoptions.
+#np.set_printoptions(threshold='nan')
 
 def load_image3( infilename) :
 
@@ -98,13 +76,16 @@ def load_image3( infilename) :
         ds = gdal.Open(infilename)
         band = ds.GetRasterBand(1)
         channel = np.array(band.ReadAsArray())
+        global _rows
         _rows = channel.shape[0] #Original rows
+        global _cols
         _cols = channel.shape[1] #Original cols
+        global _trans
         _trans = ds.GetGeoTransform() #Get transformation information from the original file
+        global _proj
         _proj = ds.GetProjection() #Get Projection Information
+        global _nodatav
         _nodatav = band.GetNoDataValue() # Get No Data Value
-        
-        logger.info("Image shape : {0}  Type : {1}".format(channel.shape,channel.dtype))
         
         return channel #Return Numpy Array
     except:
@@ -120,16 +101,19 @@ def load_image3( infilename) :
 
 def interpolate():
     try:
-        inOpticalImage = os.path.join(_path, "TRRI_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        
         inRadar = os.path.join(_path, "Radar.TIF")
-        inCloud = os.path.join(_path, "cloud_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        inCloud = os.path.join(_path, "Cloud_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        inOpticalImage = os.path.join(_path, "TRRI_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
 
         ## Convert Rasters to respective numpy arrays
         arrOptical = load_image3(inOpticalImage)
         arrRadar =load_image3(inRadar)
         arrCloud =load_image3(inCloud)
 
-
+        inRadar = None
+        inCloud = None
+        inOpticalImage = None
         ##This will get you the number of rows and columns in your array for the cloud image
         ##Image has 1, 0 representing cloud and non-cloud pixels respectively
         #(max_rows, max_cols,bv) = arrCloud.shape
@@ -137,32 +121,70 @@ def interpolate():
         max_rows=_tuple[0]
         max_cols=_tuple[1]
 
-        ## Loop thru all the cells in the cloud array
-        ## Check for cell values that are 1 and ignore the onces that are zero
-        ## 1= cloud cell
-        ## 0= Non cloud cell
-        for m in range (0, max_rows):
-            for n in range (0, max_cols):
-                cell_value = arrCloud.item(m,n)
-                if cell_value== 1: #Cloud pixel
-                    DN_value_optical_image = arrRadar.item(m,n) #Get DN value from radar image
-                    ##Look for another cell(r,c) in the radar image with the same DN value within a radius/threshold of x cells
-                    ##Return the cell row and column
-                    returnList = makeSpiralSearchinMatrix(arrRadar,m,n,12,DN_value_optical_image)# for now the threshold is 12 pixels
+        logger.info("Radar Array : "+str(arrRadar.shape)+"  Type : "+str(arrRadar.dtype))
+        logger.info("Cloud Array : "+str(arrCloud.shape)+"  Type : "+str(arrCloud.dtype))
+        logger.info("Optical Array : "+str(arrOptical.shape)+"  Type : "+str(arrOptical.dtype))
+       
+        #Get all cloud pixels
+        #logger.info(arrCloud)
 
-                    if returnList[0] !=0:
-                        #Set current DN value of optical image to new DN value for the returned q,r row
-                        arrOptical[m,n] = arrOptical[returnList[1],returnList[2]]
-                        logger.info("OGN DN Value : {0} Old Row : {1} Old Col : {2} |  New DN Value : {3}  New Row : {4}  New Col : {5} ".\
-                        format(DN_value_optical_image,m,n,returnList[0],returnList[1],returnList[2]))
-
-                    #print returnList
-
-        ##Convert Array to raster (keep the origin and cellsize the same as the input)
-
-        _outFile = "outputfile.tif" #Get the file name from the infilename
-        save_image( arrOptical, _outFile )
+        ##Convert arrCloud
+        arrCloudCopy = np.copy(arrCloud)
+        arrCloudCopy[arrCloudCopy==1]=99 #convert 1 to 99
+        arrCloudCopy[arrCloudCopy==0]=1 #convert 0 to 1
+        arrCloudCopy[arrCloudCopy==99]=0#Convert 99 to 0
+        ##Cloud pixels is now 0
+        #Exclude the same cloud pixels from the radar image
+        arrRadar2 = np.copy(arrRadar)
+        arrRadar2 = arrRadar2*arrCloudCopy
         
+        #Convert 0. to 999.
+        arrRadar2[arrRadar2==0.]=999.
+        arrCloudCopy=None#free memory
+        
+        
+        #Replace cloud pixels with those that are not cloudy from the radar image
+        print datetime.now().strftime("-%y-%m-%d_%H-%M-%S")
+        y =0
+        str_list=[]
+        it = np.nditer(arrCloud,flags=['multi_index'])
+        while not it.finished:
+            #str_list.append("%d <%s>" %(it[0],it.multi_index)),
+            if it[0]==1:#Cloud pixel
+                m = it.multi_index[0]
+                n = it.multi_index[1]
+                DN_value_optical_image = arrRadar.item(m,n) #Get DN value from radar image
+                ## Look for another cell(r,c) in the radar image with the same DN value within a radius/threshold of x cells
+                ## Currently x = 100 ad is paased as an argument
+                ## The radar image to search is the one we have excluded the cloudy pixels
+                ## Return the cell row and column
+                returnList = makeSpiralSearchinMatrix(arrRadar2,m,n,100,DN_value_optical_image)# for now the threshold is 3 pixels
+                if returnList[0] !=0:
+                    #Set current DN value of optical image to new DN value for the returned q,r row
+                    arrOptical[m,n] = arrOptical[returnList[1],returnList[2]]
+                    #logger.info("OGN DN Value : {0} Old Row : {1} Old Col : {2} |  New DN Value : {3}  New Row : {4}  New Col : {5} ".\
+                    #format(DN_value_optical_image,m,n,returnList[0],returnList[1],returnList[2]))
+                #else:
+                    #logger.info("---(Row,Col) = "+str(m)+","+str(n)+"--Null Return List : "+str(returnList))
+            y = y+1
+            print(y)
+            it.iternext()
+        print y
+        print datetime.now().strftime("-%y-%m-%d_%H-%M-%S")
+        print "Completed raster analysis"
+        #strOutput =''.join(str_list)
+        logger.info(strOutput)
+
+        
+        ##Convert Array to raster (keep the origin and cellsize the same as the input)
+        global _rows        
+        global _cols        
+        global _trans        
+        global _proj        
+        global _nodatav
+        outputRasterFile = os.path.join(_path, "CloudFree_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        WriteRaster.writeTIFF(_rows,_cols,_trans,_proj,_nodatav,arrOptical,outputRasterFile)
+                       
     except:
         ## Return any Python specific errors and any error returned
         tb = sys.exc_info()[2]
@@ -186,6 +208,8 @@ def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
         colLength = (2 * threshold) + colStart;
 
         DN_value = 0 #Initialize variable
+        breakAgain = 0 # Variable determines if there is need to break again from the outer
+                        # While loop
         while (rowStart <= rowLength and  colStart <= colLength):
             try:
                 #Top Boundary
@@ -198,7 +222,11 @@ def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
                             returnList[0]=DN_value
                             returnList[1]=rowStart
                             returnList[2]=i
+                            breakAgain =1
+                            break
                     i+=1
+                if (breakAgain ==1):
+                    break
 
                 #Right Boundary
                 j = rowStart + 1
@@ -210,7 +238,11 @@ def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
                             returnList[0]=DN_value
                             returnList[1]=j
                             returnList[2]=colLength
+                            breakAgain =1
+                            break
                     j+=1
+                if (breakAgain ==1):
+                    break                
 
                 #Bottom Boundary
                 if(rowStart+1 <= rowLength ):
@@ -223,7 +255,13 @@ def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
                                 returnList[0]=DN_value
                                 returnList[1]=rowLength
                                 returnList[2]=k
+                                breakAgain = 1
+                                break
                         k-=1
+                        
+                if (breakAgain ==1):
+                    break
+                
                 #Left boundary
                 if(colStart+1 <= colLength ):
                     k = rowLength-1
@@ -235,8 +273,12 @@ def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
                                 returnList[0]=DN_value
                                 returnList[1]=k
                                 returnList[2]=colStart
+                                breakAgain = 1
+                                break
                         k-=1
-
+                        
+                if (breakAgain ==1):
+                    break
             except:
                 ## Return any Python specific errors and any error returned
                 tb = sys.exc_info()[2]

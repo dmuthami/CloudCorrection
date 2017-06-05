@@ -27,7 +27,7 @@ try:
 
     #Set-up Error Logging
     logger_error = logging.getLogger('myError')
-    Configurations.Configurations_cloudCorrection_error_logfile = os.path.join(os.path.dirname(__file__), 'cloudCorrecttion_error_logfile.log')
+    Configurations.Configurations_cloudCorrection_error_logfile = os.path.join(os.path.dirname(__file__), 'cloudCorrection_error_logfile.log')
     hdlr_error = logging.FileHandler(Configurations.Configurations_cloudCorrection_error_logfile)
     #formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
     hdlr_error.setFormatter(formatter)
@@ -41,7 +41,7 @@ try:
         configFileLocation=sys.argv[1]##Get from console or GUI being user input
     else :
         #Read from config file
-        configFileLocation=r"/home/geonode/Documents/Python/ArcGIS/Config.ini"
+        configFileLocation=os.path.join(os.path.dirname(__file__), 'Config.ini')
 
     ##Read from config file
     #If for any reason an exception is thrown here then subsequent code will not be executed
@@ -53,7 +53,7 @@ try:
     ##Get all raster files
     arr = GetImageFolders.ouputRasterArray(Configurations.Configurations_imagesfolder,\
     Configurations.Configurations_excludefolder)
-    ##print arr
+    #print arr
 
     ##Get the numer of rows and columns
     (max_rows, max_cols) = arr.shape
@@ -94,7 +94,7 @@ try:
                 nodatav = band.GetNoDataValue() # Get No Data Value
 
                 #Save Image
-                WriteRaster.writeTIFF(ds,rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile)
+                WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile)
                 
                 logger.info("---------------")
                 logger.info (" Raster Input : {0} \n Dir : {1} \n Extension : {2} \n Band No : {3} \n Txt F.Name : {4} \n Gain : {5} \n Offset : {6} \n Reflectance Image : {7}".\
@@ -102,7 +102,8 @@ try:
                        paramList[2],paramList[3],paramList[4],\
                        paramList[5],paramList[6],\
                        outputRasterFile))
-                logger.info ("---------------")                
+                logger.info ("---------------")
+        
             except:
                 ## Return any Python specific errors and any error returned by the geoprocessor
                 ##
