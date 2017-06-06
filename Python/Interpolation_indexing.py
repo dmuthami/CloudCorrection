@@ -56,9 +56,71 @@ Configurations.setParameters(configFileLocation)
 #Set workspace and other parameters
 Configurations.setWorkspace()
 
-#Path to the interpolation folder
-_path = r"/home/geonode/Documents/Landsat/LC08_L1TP_166063_20170112_20170311_01_T1/Reflectance"
+#Set Compute cloud Parameters
+Configurations.setComputeCloud()
 
+#Set Remove workspace and other parameters
+Configurations.setRemoveCloud()
+
+
+#Path
+_path=""
+if len(sys.argv)>2:
+    _path=sys.argv[2]##Get from console or GUI being user input
+else :
+    #Read from config file
+    _path=Configurations.Configurations_path
+
+#TRRI Image
+_TRRIImage=""
+if len(sys.argv)>3:
+    _TRRIImage=sys.argv[3]##Get from console or GUI being user input
+else :
+    #Read from config file
+    _TRRIImage=Configurations.Configurations_TRRI_Image
+
+#Cloud Image
+_CloudImage=""
+if len(sys.argv)>4:
+    _CloudImage=sys.argv[4]##Get from console or GUI being user input
+else :
+    #Read from config file
+    _CloudImage=Configurations.Configurations_Cloud_Image
+
+#TRRI2 Image
+_TRRI2Image=""
+if len(sys.argv)>5:
+    _TRRI2Image=sys.argv[5]##Get from console or GUI being user input
+else :
+    #Read from config file
+    _TRRI2Image=Configurations.Configurations_TRRI2_Image
+
+#CloudFree Image
+_CloudFreeImage=""
+if len(sys.argv)>6:
+    _CloudFreeImage=sys.argv[6]##Get from console or GUI being user input
+else :
+    #Read from config file
+    _CloudFreeImage=Configurations.Configurations_CloudFree_Image
+
+
+#max search distance
+_maxSearchDist=""
+if len(sys.argv)>7:
+    _maxSearchDist=sys.argv[7]##Get from console or GUI being user input
+else :
+    #Read from config file
+    _maxSearchDist=Configurations.Configurations_maxSearchDistance
+
+#max search distance
+_nodatavalue=""
+if len(sys.argv)>8:
+    _nodatavalue=sys.argv[8]##Get from console or GUI being user input
+else :
+    #Read from config file
+    _nodatavalue=Configurations.Configurations_nodatavalue
+    
+    
 ##Gather information from the original file
 ##Store it in this global variables      
 _cols = 0
@@ -91,43 +153,16 @@ def getImage(infilename,readOnly):
         logger_error.info(pymsg)    
         return ""
     
-def load_image3( infilename) :
-
-    try:
-        ds = gdal.Open(infilename)
-        band = ds.GetRasterBand(1)
-        channel = np.array(band.ReadAsArray())
-        global _rows
-        _rows = channel.shape[0] #Original rows
-        global _cols
-        _cols = channel.shape[1] #Original cols
-        global _trans
-        _trans = ds.GetGeoTransform() #Get transformation information from the original file
-        global _proj
-        _proj = ds.GetProjection() #Get Projection Information
-        global _nodatav
-        _nodatav = band.GetNoDataValue() # Get No Data Value
-        
-        return channel #Return Numpy Array
-    except:
-        ## Return any Python specific errors and any error returned
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-
-        pymsg = "PYTHON ERRORS:\n  Function def load_image( infilename ) \n" + tbinfo + "\nError Info:\n    " + \
-                str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
-        ##Write to the error log file
-        logger_error.info(pymsg)
-        return ""
-
 def interpolate():
     try:
+        global _TRRIImage,_CloudImage,_TRRI2Image,_CloudFreeImage,_maxSearchDist,_nodatavalue
         
-        radarPath = os.path.join(_path, "Radar.TIF")
-        cloudPath = os.path.join(_path, "Cloud_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
-        opticalPath = os.path.join(_path, "TRRI_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        
+        #radarPath = os.path.join(_path, "Radar.TIF")
+        cloudPath = os.path.join(_path, _CloudImage)
+        opticalPath = os.path.join(_path, _TRRIImage)
 
-        radarImage = getImage(radarPath,True)
+        #radarImage = getImage(radarPath,True)
         cloudImage = getImage(cloudPath, True)
         opticalImage = getImage(opticalPath,True)
 
@@ -148,33 +183,33 @@ def interpolate():
         global _nodatav
         _nodatav = band.GetNoDataValue() # Get No Data Value
         if(_nodatav==None):
-            _nodatav = -999.
+            _nodatav = float(_nodatavalue)
 
         #Multiply cloud pixel (cloudArr) with no data value -999= cloudArr2
         cloudBand = cloudImage.GetRasterBand(1)
         cloudArr = np.array(cloudBand.ReadAsArray())    
-        cloudArr2 = cloudArr*-999
+        cloudArr2 = cloudArr*int(float(_nodatavalue))
 
         #Add cloudArr2 to the opticalArr to give opticalArr2
         opticalArr2 = cloudArr2 + opticalArr
-        opticalArr2[opticalArr2<-900]=-999.  #Replace all values < -900 with -999
+        opticalArr2[opticalArr2<-900]=float(_nodatavalue)  #Replace all values < -900 with -999
         
         ##Convert Array to raster (keep the origin and cellsize the same as the input)
         ##Remeber NoDatavalue = -999 or -999.0
-        outputRasterFile = os.path.join(_path, "TRRI2_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        outputRasterFile = os.path.join(_path, _TRRI2Image)
         WriteRaster.writeTIFF(_rows,_cols,_trans,_proj,_nodatav,opticalArr2,outputRasterFile)
 
         ##Create a copy of opticalArr2 
-        outputRasterFile = os.path.join(_path, "CloudFree_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        outputRasterFile = os.path.join(_path, _CloudFreeImage)
         WriteRaster.writeTIFF(_rows,_cols,_trans,_proj,_nodatav,opticalArr2,outputRasterFile)
         
         #Read the image again
         #Execute fillnodata
-        opticalPath2 = os.path.join(_path, "CloudFree_LC08_L1TP_166063_20170112_20170311_01_T1.TIF")
+        opticalPath2 = os.path.join(_path, _CloudFreeImage)
         opticalImage2 = getImage(opticalPath,False)
         channelband = opticalImage2.GetRasterBand(1)        
         result = gdal.FillNodata(targetBand = channelband, maskBand = None, \
-                                 maxSearchDist = 1000, smoothingIterations =0)
+                                 maxSearchDist = int(_maxSearchDist), smoothingIterations =0)
 
         result = None #Flush out the results to disk
         
@@ -193,112 +228,6 @@ def interpolate():
         logger_error.info( pymsg)
 
     return ""
-
-def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
-    ##DNValue,Row,Col
-    returnList=[0,0,0]
-    try:
-        threshold = length - 1;
-        rowStart=row-threshold;
-        rowLength=(2 * threshold) + rowStart;
-
-        colStart=col - threshold
-        colLength = (2 * threshold) + colStart;
-
-        DN_value = 0 #Initialize variable
-        breakAgain = 0 # Variable determines if there is need to break again from the outer
-                        # While loop
-        while (rowStart <= rowLength and  colStart <= colLength):
-            try:
-                #Top Boundary
-                i = rowStart
-                while(i<= colLength):
-                    DN_value = arrRadar.item(rowStart,i)
-                    #print DN_value
-                    if(row != rowStart and col != i):
-                        if(DN_value==DN_value_optical_image and rowStart>=0 and i>=0 ):
-                            returnList[0]=DN_value
-                            returnList[1]=rowStart
-                            returnList[2]=i
-                            breakAgain =1
-                            break
-                    i+=1
-                if (breakAgain ==1):
-                    break
-
-                #Right Boundary
-                j = rowStart + 1
-                while(j<= colLength):
-                    DN_value = arrRadar.item(j,colLength)
-                    #print DN_value
-                    if( row!= j and col != colLength):
-                        if(DN_value==DN_value_optical_image and j>=0 and colLength>=0):
-                            returnList[0]=DN_value
-                            returnList[1]=j
-                            returnList[2]=colLength
-                            breakAgain =1
-                            break
-                    j+=1
-                if (breakAgain ==1):
-                    break                
-
-                #Bottom Boundary
-                if(rowStart+1 <= rowLength ):
-                    k = colLength-1
-                    while(k >= colStart):
-                        DN_value = arrRadar.item(rowLength,k)
-                        #print DN_value
-                        if( row!= rowLength and col != k):
-                            if(DN_value==DN_value_optical_image and rowLength>=0 and k >=0):
-                                returnList[0]=DN_value
-                                returnList[1]=rowLength
-                                returnList[2]=k
-                                breakAgain = 1
-                                break
-                        k-=1
-                        
-                if (breakAgain ==1):
-                    break
-                
-                #Left boundary
-                if(colStart+1 <= colLength ):
-                    k = rowLength-1
-                    while(k > rowStart):
-                        DN_value = arrRadar.item(k,colStart)
-                        #print DN_value
-                        if( row!= k and col != colStart):
-                            if(DN_value==DN_value_optical_image and k >=0 and colStart>=0):
-                                returnList[0]=DN_value
-                                returnList[1]=k
-                                returnList[2]=colStart
-                                breakAgain = 1
-                                break
-                        k-=1
-                        
-                if (breakAgain ==1):
-                    break
-            except:
-                ## Return any Python specific errors and any error returned
-                tb = sys.exc_info()[2]
-                tbinfo = traceback.format_tb(tb)[0]
-                pymsg = "PYTHON ERRORS:\n Main FunctionTraceback Info:\n" + tbinfo + "\nError Info:\n    " + \
-                        str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
-                ##Write to the error log file
-                logger_error.info( pymsg)
-            rowStart+=1
-            rowLength-=1
-            colStart+=1
-            colLength-=1
-    except:
-        ## Return any Python specific errors and any error returned
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-        pymsg = "PYTHON ERRORS:\n Main FunctionTraceback Info:\n" + tbinfo + "\nError Info:\n    " + \
-                str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
-        ##Write to the error log file
-        logger_error.info( pymsg)
-
-    return returnList
 
 def main():
     pass

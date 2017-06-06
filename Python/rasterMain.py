@@ -50,8 +50,11 @@ try:
     #Set workspace
     Configurations.setWorkspace()
     
+    #Set Reflectance Parameters
+    Configurations.setReflectance()
+    
     ##Get all raster files
-    arr = GetImageFolders.ouputRasterArray(Configurations.Configurations_imagesfolder,\
+    arr = GetImageFolders.outputRasterArray(Configurations.Configurations_imagesfolder,\
     Configurations.Configurations_excludefolder)
     #print arr
 
@@ -82,9 +85,10 @@ try:
                 npReflectance = npdata*float(paramList[5]) + float(paramList[6])
 
                 ##Save the Reflectance output to TIFF file
-                outputDirectory = os.path.join(directory, "Reflectance")
+                outputDirectory = os.path.join(directory, Configurations.Configurations_reflectancefolder)
                 Utilities.checkIfDirectoryExists(outputDirectory)
-                outputRasterFile = os.path.join(outputDirectory, "Reflectance_" + fileName)
+                outputRasterFile = os.path.join(outputDirectory, \
+                                                Configurations.Configurations_reflectanceprefix+"_" + fileName)
 
                 
                 rows = npdata.shape[0] #Original rows

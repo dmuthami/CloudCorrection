@@ -100,7 +100,8 @@ def writeTIFF2(rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile):
 
 
         #Seta no data value
-        #output_raster.GetRasterBand(1).SetNoDataValue(nodatav)
+        if(nodatav!=None):
+            output_raster.GetRasterBand(1).SetNoDataValue(nodatav)
             
         output_raster.SetProjection( proj )   # Exports the coordinate system
                                               # to the file

@@ -87,7 +87,7 @@ def getFileExtension(fileName):
         return ""
 
 
-def ouputRasterArray(_directory,excludeFolder):
+def outputRasterArray(_directory,excludeFolder):
     try:
         rasterList = getAllTIFF_Images(_directory,excludeFolder) #Get list of raster file
         rasterListLength = len(rasterList) #Get the length of the list
@@ -111,7 +111,7 @@ def main():
 if __name__ == '__main__':
     main()
     #Call entry function
-    #arr = ouputRasterArray("/home/geonode/Documents/Landsat","Reflectance")
+    #arr = outputRasterArray("/home/geonode/Documents/Landsat","Reflectance")
     ##Get the numer of rows and columns
     #(max_rows, max_cols) = arr.shape
     #for m in range (0, max_rows):
