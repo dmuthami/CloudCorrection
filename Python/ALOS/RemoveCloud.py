@@ -4,22 +4,22 @@
 #
 # Author:      Maithya
 #
-# Created:     16/05/2017
+# Created:     29/04/2017
 # Copyright:   (c) Maithya 2017
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
-import os,sys
+import os, sys
 import logging
 import traceback
 import numpy as np
 from osgeo import gdal
+import math
 from gdalconst import *
 from datetime import datetime
 
-
-
 ##Custom module containing functions
 import Configurations
+import Utilities
 import WriteRaster
 
 #Set-up logging
@@ -53,15 +53,20 @@ else :
 #If for any reason an exception is thrown here then subsequent code will not be executed
 Configurations.setParameters(configFileLocation)
 
-#Set workspace and other parameters
+#Set workspace
 Configurations.setWorkspace()
 
-#Set Compute cloud Parameters
-Configurations.setComputeCloud()
+#Call function to set parameters for radiance
+Configurations.setRadiance()
+
+#Call function to set parameters for reflectance
+Configurations.setReflectance()
+
+#Call function to set parameters for TRRI
+Configurations.setTRRI()
 
 #Set Remove workspace and other parameters
 Configurations.setRemoveCloud()
-
 
 #Path
 _path=""
@@ -69,31 +74,31 @@ if len(sys.argv)>2:
     _path=sys.argv[2]##Get from console or GUI being user input
 else :
     #Read from config file
-    _path=Configurations.Configurations_path
+    _path=Configurations.Configurations_workspace
 
-#TRRI Image
-_TRRIImage=""
+#TRRI Folder
+_TRRIFolder=""
 if len(sys.argv)>3:
-    _TRRIImage=sys.argv[3]##Get from console or GUI being user input
+    _TRRIFolder=sys.argv[3]##Get from console or GUI being user input
 else :
     #Read from config file
-    _TRRIImage=Configurations.Configurations_TRRI_Image
+    _TRRIFolder=Configurations.Configurations_trrifolder
 
-#Cloud Image
-_CloudImage=""
+#Filename to band1
+_band1Filename=""
 if len(sys.argv)>4:
-    _CloudImage=sys.argv[4]##Get from console or GUI being user input
+    _band1Filename=sys.argv[4]##Get from console or GUI being user input
 else :
     #Read from config file
-    _CloudImage=Configurations.Configurations_Cloud_Image
-
-#TRRI2 Image
-_TRRI2Image=""
+    _band1Filename=Configurations.Configurations_fileNameB1
+    
+#Cloud Image
+_cloudImage=""
 if len(sys.argv)>5:
-    _TRRI2Image=sys.argv[5]##Get from console or GUI being user input
+    _cloudImage=sys.argv[5]##Get from console or GUI being user input
 else :
     #Read from config file
-    _TRRI2Image=Configurations.Configurations_TRRI2_Image
+    _cloudImage=Configurations.Configurations_cloudImage
 
 #CloudFree Image
 _CloudFreeImage=""
@@ -119,19 +124,14 @@ if len(sys.argv)>8:
 else :
     #Read from config file
     _nodatavalue=Configurations.Configurations_nodatavalue
-    
-    
-##Gather information from the original file
-##Store it in this global variables      
-_cols = 0
-_rows = 0
-_proj = ""
-_trans = ""
-_nodatav = ""
 
-#To disable this behaviour and force NumPy to print the entire array, 
-#you can change the printing options using set_printoptions.
-#np.set_printoptions(threshold='nan')
+#Radar Image
+radar_Image=""
+if len(sys.argv)>9:
+    radar_Image=sys.argv[9]##Get from console or GUI being user input
+else :
+    #Read from config file
+    radar_Image=Configurations.Configurations_radar_Image
 
 def getImage(infilename,readOnly):
     try:
@@ -153,37 +153,34 @@ def getImage(infilename,readOnly):
         logger_error.info(pymsg)    
         return ""
     
-def interpolate():
+def removeCloud():
     try:
-        global _TRRIImage,_CloudImage,_TRRI2Image,_CloudFreeImage,_maxSearchDist,_nodatavalue
-        
+        global _TRRIImage, _CloudImage, _CloudFreeImage, _maxSearchDist, _nodatavalue
+        global _path, _band1Filename, _TRRIFolder
+
+        #Get band number
+        lst =_band1Filename.split("-")#Split by hyphen*
+        TRRIFilename = lst[1]+"-"+lst[2]#get last components. looks like "ALAV2A191273610-O1B2R_U.tif"
+
         
         #radarPath = os.path.join(_path, "Radar.TIF")
-        cloudPath = os.path.join(_path, _CloudImage)
-        opticalPath = os.path.join(_path, _TRRIImage)
+        cloudPath = outputRasterFile = os.path.join(_path, _TRRIFolder, _cloudImage+"_"+TRRIFilename)
+        opticalPath = os.path.join(_path, _TRRIFolder, _TRRIFolder+"_"+TRRIFilename)
 
         #radarImage = getImage(radarPath,True)
         cloudImage = getImage(cloudPath, True)
         opticalImage = getImage(opticalPath,True)
 
-        
-
         #Get No datavalue for the optical image
         band = opticalImage.GetRasterBand(1)
-        opticalArr = np.array(band.ReadAsArray())
-        global _rows
-        _rows = opticalArr.shape[0] #Original rows
-        global _cols
-        _cols = opticalArr.shape[1] #Original cols
-        global _trans
-        _trans = opticalImage.GetGeoTransform() #Get transformation information from the original file
-        global _proj
-        _proj = opticalImage.GetProjection() #Get Projection Information
-                
-        global _nodatav
-        _nodatav = band.GetNoDataValue() # Get No Data Value
-        if(_nodatav==None):
-            _nodatav = float(_nodatavalue)
+        opticalArr = np.array(band.ReadAsArray())        
+        rows = opticalArr.shape[0] #Original rows       
+        cols = opticalArr.shape[1] #Original cols        
+        trans = opticalImage.GetGeoTransform() #Get transformation information from the original file       
+        proj = opticalImage.GetProjection() #Get Projection Information
+        nodatav = band.GetNoDataValue() # Get No Data Value
+        if(nodatav==None):
+            nodatav = float(_nodatavalue)        
 
         #Multiply cloud pixel (cloudArr) with no data value -999= cloudArr2
         cloudBand = cloudImage.GetRasterBand(1)
@@ -193,20 +190,20 @@ def interpolate():
         #Add cloudArr2 to the opticalArr to give opticalArr2
         opticalArr2 = cloudArr2 + opticalArr
         opticalArr2[opticalArr2<-900]=float(_nodatavalue)  #Replace all values < -900 with -999
-        
+
         ##Convert Array to raster (keep the origin and cellsize the same as the input)
         ##Remeber NoDatavalue = -999 or -999.0
-        outputRasterFile = os.path.join(_path, _TRRI2Image)
-        WriteRaster.writeTIFF(_rows,_cols,_trans,_proj,_nodatav,opticalArr2,outputRasterFile)
+        outputRasterFile = os.path.join(_path, _TRRIFolder, _TRRIFolder+"2_"+TRRIFilename)#output file
+        WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,opticalArr2,outputRasterFile)
 
         ##Create a copy of opticalArr2 
-        outputRasterFile = os.path.join(_path, _CloudFreeImage)
-        WriteRaster.writeTIFF(_rows,_cols,_trans,_proj,_nodatav,opticalArr2,outputRasterFile)
-        
+        outputRasterFile = os.path.join(_path, _TRRIFolder,_CloudFreeImage+"_"+TRRIFilename)
+        WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,opticalArr2,outputRasterFile)
+
         #Read the image again
         #Execute fillnodata
-        opticalPath2 = os.path.join(_path, _CloudFreeImage)
-        opticalImage2 = getImage(opticalPath,False)
+        opticalPath2 = os.path.join(_path, _TRRIFolder,_CloudFreeImage+"_"+TRRIFilename)
+        opticalImage2 = getImage(opticalPath2,False)
         channelband = opticalImage2.GetRasterBand(1)        
         result = gdal.FillNodata(targetBand = channelband, maskBand = None, \
                                  maxSearchDist = int(_maxSearchDist), smoothingIterations =0)
@@ -217,16 +214,15 @@ def interpolate():
         cloudImage = None
         opticalImage = None
         
-                       
     except:
         ## Return any Python specific errors and any error returned
         tb = sys.exc_info()[2]
         tbinfo = traceback.format_tb(tb)[0]
-        pymsg = "PYTHON ERRORS:\n Main FunctionTraceback Info:\n" + tbinfo + "\nError Info:\n    " + \
+
+        pymsg = "PYTHON ERRORS:\n  Function def removeCloud() \n" + tbinfo + "\nError Info:\n    " + \
                 str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
         ##Write to the error log file
-        logger_error.info( pymsg)
-
+        logger_error.info(pymsg)
     return ""
 
 def main():
@@ -234,6 +230,5 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-    ##Call true function
-    interpolate()
+    #Call function
+    removeCloud()

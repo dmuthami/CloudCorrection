@@ -49,6 +49,17 @@ Configurations_ESUN_B3 = ""
 Configurations_ESUN_B4 = ""
 Configurations_theta = ""
 
+#TRRI global variables
+Configurations_trrifolder = ""
+Configurations_cloudthreshold = ""
+Configurations_cloudImage = ""
+
+#removeCloud global variables
+Configurations_CloudFree_Image = ""
+Configurations_maxSearchDistance = ""
+Configurations_nodatavalue = ""
+Configurations_radar_Image = ""
+
 #Set-up logging
 logger = logging.getLogger('myapp')
 Configurations_cloudCorrection_logfile = os.path.join(os.path.dirname(__file__), 'cloudCorrection_logfile.log')
@@ -200,6 +211,50 @@ def setReflectance():
 
     return ""
 
+##Set parameters for TRRI
+def setTRRI():
+
+    #read TRRI folder location from Config file location
+    global Configurations_trrifolder # Needed to modify global copy of Configurations_trrifolder
+    Configurations_trrifolder = Configurations_Config.get('TRRI', 'trrifolder')
+    logger.info("Configurations_trrifolder : "+ Configurations_trrifolder)
+
+    #read cloud threshold from Config file location
+    global Configurations_cloudthreshold # Needed to modify global copy of Configurations_cloudthreshold
+    Configurations_cloudthreshold = Configurations_Config.get('TRRI', 'cloudthreshhold')
+    logger.info("Configurations_cloudthreshold : "+ Configurations_cloudthreshold)
+
+    #read cloud image from Config file location
+    global Configurations_cloudImage # Needed to modify global copy of Configurations_cloudImage
+    Configurations_cloudImage = Configurations_Config.get('TRRI', 'cloudImage')
+    logger.info("Configurations_cloudImage : "+ Configurations_cloudImage)
+
+    return ""
+
+##Set parameters for Remove cloud
+def setRemoveCloud():
+
+    #read Cloud Free Image FileName from Config file location
+    global Configurations_CloudFree_Image # Needed to modify global copy of Configurations_trrifolder
+    Configurations_CloudFree_Image = Configurations_Config.get('RemoveCloud', 'CloudFree_Image')
+    logger.info("Configurations_CloudFree_Image : "+ Configurations_CloudFree_Image)
+
+    #read Maximum Search Distance from Config file location
+    global Configurations_maxSearchDistance # Needed to modify global copy of Configurations_maxSearchDistance
+    Configurations_maxSearchDistance = Configurations_Config.get('RemoveCloud', 'maxSearchDistance')
+    logger.info("Configurations_maxSearchDistance : "+ Configurations_maxSearchDistance)
+
+    #read Cloud Free Image FileName from Config file location
+    global Configurations_nodatavalue # Needed to modify global copy of Configurations_trrifolder
+    Configurations_nodatavalue = Configurations_Config.get('RemoveCloud', 'nodatavalue')
+    logger.info("Configurations_nodatavalue : "+ Configurations_nodatavalue)    
+
+    #read Radar Image FileName from Config file location
+    global Configurations_radar_Image # Needed to modify global copy of Configurations_radar_Image
+    Configurations_radar_Image = Configurations_Config.get('RemoveCloud', 'radar_Image')
+    logger.info("Configurations_radar_Image : "+ Configurations_radar_Image)
+    
+    return ""
 def main():
     pass
 
@@ -217,4 +272,10 @@ if __name__ == '__main__':
 
     #Call function to set parameters for reflectance
     #setReflectance()
+
+    #Call function to set parameters for TRRI
+    #setTRRI()
+
+    #Call function to set parameters for Remove Cloud
+    #setRemoveCloud()
 
