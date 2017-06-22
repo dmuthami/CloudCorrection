@@ -21,6 +21,7 @@ from datetime import datetime
 ##Custom module containing functions
 import Configurations
 import WriteRaster
+import Utilities
 
 #Set-up logging
 logger = logging.getLogger('myapp')
@@ -232,21 +233,6 @@ def interpolate():
         arrBand3 = getNumpyArray(band3Image)
         arrBand4 = getNumpyArray(band4Image)
 
-        ##Convert arrCloud
-        arrCloudCopy = np.copy(arrCloud).astype(float)
-        arrCloudCopy[arrCloudCopy==1.]=99. #convert 1 to 99
-        arrCloudCopy[arrCloudCopy==0.]=1. #convert 0 to 1
-        arrCloudCopy[arrCloudCopy==99.]=0.#Convert 99 to 0
-        ##Cloud pixels is now 0
-        #Exclude the same cloud pixels from the radar image
-        arrRadarCopy = np.copy(arrRadar)
-        arrRadar2= np.multiply(arrRadarCopy,arrCloudCopy)
-        #arrRadar2 = arrRadar2*arrCloudCopy
-        
-        #Convert 0. to 999.
-        arrRadar2[arrRadar2==0.]=999.
-        arrCloudCopy=arrRadarCopy=None#free memory
-
         #Replace cloud pixels with those that are not cloudy from the radar image
         print datetime.now().strftime("-%y-%m-%d_%H-%M-%S")
         y =0
@@ -257,31 +243,33 @@ def interpolate():
             if it[0]==1:#Cloud pixel
                 m = it.multi_index[0]
                 n = it.multi_index[1]
-                DN_value_optical_image = arrRadar.item(m,n) #Get DN value from radar image
+                DN_value_optical_image = arrRadar[m,n] #Get DN value from radar image
                 ## Look for another cell(r,c) in the radar image with the same DN value within a radius/threshold of x cells
                 ## Currently x = 100 ad is paased as an argument
                 ## The radar image to search is the one we have excluded the cloudy pixels
                 ## Return the cell row and column
-                returnList = makeSpiralSearchinMatrix(arrRadar2,m,n,367,DN_value_optical_image)# for now the threshold is 3 pixels
+                returnList = makeSpiralSearchinMatrix(arrRadar,m,n,367,DN_value_optical_image,arrCloud)# for now the threshold is 3 pixels
                 if returnList[0] !=0:
-                    #Set current DN value of optical image and the band images to new DN value for the returned q,r row
+                    #Replace current cloud DN value of optical image and the band images to new DN value for the returned q,r row
                     arrOptical[m,n] = arrOptical[returnList[1],returnList[2]]
                     arrBand1[m,n] = arrBand1[returnList[1],returnList[2]]
                     arrBand2[m,n] = arrBand2[returnList[1],returnList[2]]
                     arrBand3[m,n] = arrBand3[returnList[1],returnList[2]]
                     arrBand4[m,n] = arrBand4[returnList[1],returnList[2]]
                     
-                    #logger.info("OGN DN Value : {0} Old Row : {1} Old Col : {2} |  New DN Value : {3}  New Row : {4}  New Col : {5} ".\
-                    #format(DN_value_optical_image,m,n,returnList[0],returnList[1],returnList[2]))
-                #else:
-                    #logger.info("---(Row,Col) = "+str(m)+","+str(n)+"--Null Return List : "+str(returnList))
+
+                else:
+                    #Replace current cloud DN value of optical image with no data value = -999.0
+                    arrOptical[m,n] = float(_nodatavalue)
+                    arrBand1[m,n] = float(_nodatavalue)
+                    arrBand2[m,n] = float(_nodatavalue)
+                    arrBand3[m,n] = float(_nodatavalue)
+                    arrBand4[m,n] = float(_nodatavalue)
             y = y+1
             print(y)
             it.iternext()
         print y
-        print datetime.now().strftime("-%y-%m-%d_%H-%M-%S")
-        print "Completed Cloud Removal raster analysis"
-        logger.info(strOutput)
+        logger.info(datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
 
         #Write cloud free raster file to disk
         rows = arrOptical.shape[0] #Original rows
@@ -293,6 +281,16 @@ def interpolate():
         Utilities.checkIfDirectoryExists(os.path.join(_path, _TRRIFolder)) #Check if directory exists
         WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,arrOptical,outputRasterFile) #Write file to disk
 
+        #Write cloudfree band1 image
+        rows = arrBand1.shape[0] #Original rows
+        cols = arrBand1.shape[1] #Original cols
+        trans = band1Image.GetGeoTransform() #Get transformation information from the original file
+        proj = band1Image.GetProjection() #Get Projection Information
+        nodatav = band1Image.GetRasterBand(1).GetNoDataValue() # Get No Data Value
+        outputRasterFile = os.path.join(_path, _TRRIFolder, _band1Filename)#output file
+        Utilities.checkIfDirectoryExists(os.path.join(_path, _TRRIFolder)) #Check if directory exists
+        WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,arrBand1,outputRasterFile) #Write file to disk
+        
         #Write cloudfree band2 image
         rows = arrBand2.shape[0] #Original rows
         cols = arrBand2.shape[1] #Original cols
@@ -322,7 +320,8 @@ def interpolate():
         outputRasterFile = os.path.join(_path, _TRRIFolder, _band4Filename)#output file
         Utilities.checkIfDirectoryExists(os.path.join(_path, _TRRIFolder)) #Check if directory exists
         WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,arrBand4,outputRasterFile) #Write file to disk
-        
+
+        logger.info( "Completed Cloud Removal raster analysis")
                        
     except:
         ## Return any Python specific errors and any error returned
@@ -335,7 +334,7 @@ def interpolate():
 
     return ""
 
-def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
+def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image,arrCloud):
     ##DNValue,Row,Col
     returnList=[0,0,0]
     try:
@@ -361,8 +360,9 @@ def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
                             returnList[0]=DN_value
                             returnList[1]=rowStart
                             returnList[2]=i
-                            breakAgain =1
-                            break
+                            if arrCloud[rowStart,i]!=1:#Check we are not replacing with another Cloud pixel
+                                breakAgain =1
+                                break
                     i+=1
                 if (breakAgain ==1):
                     break
@@ -377,8 +377,9 @@ def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
                             returnList[0]=DN_value
                             returnList[1]=j
                             returnList[2]=colLength
-                            breakAgain =1
-                            break
+                            if arrCloud[j,colLength]!=1:#Check we are not replacing with another Cloud pixel
+                                breakAgain =1
+                                break
                     j+=1
                 if (breakAgain ==1):
                     break                
@@ -394,8 +395,9 @@ def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
                                 returnList[0]=DN_value
                                 returnList[1]=rowLength
                                 returnList[2]=k
-                                breakAgain = 1
-                                break
+                                if arrCloud[rowLength,k]!=1:#Check we are not replacing with another Cloud pixel
+                                    breakAgain = 1
+                                    break
                         k-=1
                         
                 if (breakAgain ==1):
@@ -412,8 +414,9 @@ def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image):
                                 returnList[0]=DN_value
                                 returnList[1]=k
                                 returnList[2]=colStart
-                                breakAgain = 1
-                                break
+                                if arrCloud[k,colStart]!=1:#Check we are not replacing with another Cloud pixel                                
+                                    breakAgain = 1
+                                    break
                         k-=1
                         
                 if (breakAgain ==1):
