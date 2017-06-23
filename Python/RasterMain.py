@@ -1,6 +1,6 @@
 # Name: Cloud Correction
 # Description: Cloud removal and cloud shadow correction
-# Requirements: Spatial Analyst Extension
+# Requirements: gdal and numpy python libraries
 # Import system modules
 import os, sys
 import logging
@@ -13,7 +13,7 @@ import Configurations
 import Radiance
 import Reflectance
 import TRRI
-import Interpolation_Indexing as Interpolation
+import Interpolation
 
 try:
 

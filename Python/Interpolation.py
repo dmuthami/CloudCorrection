@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Name:        module1
+# Name:        Interpolates to replace cloud pixels 
 # Purpose:
 #
 # Author:      Maithya
@@ -234,19 +234,27 @@ def interpolate():
         arrBand4 = getNumpyArray(band4Image)
 
         #Replace cloud pixels with those that are not cloudy from the radar image
-        print datetime.now().strftime("-%y-%m-%d_%H-%M-%S")
+        logger.info(datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
+        print(datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
         #Loop through the cloud cells only
         
         arrCloudOnly = np.argwhere(arrCloud==1)
-        print (arrCloudOnly.shape)
+        _tuple = arrCloud.shape
+        max_rows=_tuple[0]
+        max_cols=_tuple[1]
+        thresholdSearchMatrix =0
+        if max_rows > max_cols :
+            thresholdSearchMatrix = max_rows
+        else:
+            thresholdSearchMatrix = max_cols
         y =0
         for m,n in arrCloudOnly:
             DN_value_optical_image = arrRadar[m,n] #Get DN value from radar image
-                ## Look for another cell(r,c) in the radar image with the same DN value within a radius/threshold of x cells
-                ## Currently x = 100 ad is paased as an argument
-                ## The radar image to search is the one we have excluded the cloudy pixels
-                ## Return the cell row and column
-            returnList = makeSpiralSearchinMatrix(arrRadar,m,n,367,DN_value_optical_image,arrCloud)# for now the threshold is 3 pixels
+            ## Look for another cell(r,c) in the radar image with the same DN value within a radius/threshold of x cells
+            ## Currently x = 100 ad is paased as an argument
+            ## The radar image to search is the one we have excluded the cloudy pixels
+            ## Return the cell row and column
+            returnList = makeSpiralSearchinMatrix(arrRadar,m,n,int(thresholdSearchMatrix),DN_value_optical_image,arrCloud)# for now the threshold is 3 pixels
             if returnList[0] !=0:
                 #Replace current cloud DN value of optical image and the band images to new DN value for the returned q,r row
                 arrOptical[m,n] = arrOptical[returnList[1],returnList[2]]
@@ -265,7 +273,7 @@ def interpolate():
                 arrBand4[m,n] = float(_nodatavalue)
             y = y+1
             print(y)
-        print(y)
+        print(datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
         logger.info(datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
 
         #Write cloud free raster file to disk
