@@ -166,7 +166,7 @@ else :
     _reflectancefolder=Configurations.Configurations_reflectancefolder
 
 
-def computeRadiance():
+def computeReflectance():
     try:
         global _path ,_band1Filename, _band2Filename, _band3Filename,_band4Filename
         global _d, _ESUN_B1,_ESUN_B2,_ESUN_B3,_ESUN_B4,_theta
@@ -257,4 +257,4 @@ def main():
 if __name__ == '__main__':
     main()
     #Call function
-    computeRadiance()
+    computeReflectance()

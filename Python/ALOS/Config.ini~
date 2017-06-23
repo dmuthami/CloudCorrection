@@ -27,7 +27,7 @@ theta : 65.20
 
 [TRRI]
 trrifolder : TRRI
-cloudthreshhold : 55.0
+cloudthreshhold : 30.0
 cloudImage : Cloud
 
 [RemoveCloud]
