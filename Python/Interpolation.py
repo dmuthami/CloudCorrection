@@ -22,6 +22,7 @@ from datetime import datetime
 import Configurations
 import WriteRaster
 import Utilities
+import SpiralSearchMatrix
 
 #Set-up logging
 logger = logging.getLogger('myapp')
@@ -234,8 +235,8 @@ def interpolate():
         arrBand4 = getNumpyArray(band4Image)
 
         #Replace cloud pixels with those that are not cloudy from the radar image
-        logger.info(datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
-        print(datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
+        logger.info("Start: "+datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
+        print("Start: "+datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
         #Loop through the cloud cells only
         
         arrCloudOnly = np.argwhere(arrCloud==1)
@@ -244,9 +245,11 @@ def interpolate():
         max_cols=_tuple[1]
         thresholdSearchMatrix =0
         if max_rows > max_cols :
-            thresholdSearchMatrix = max_rows
+            thresholdSearchMatrix = max_rows/4
         else:
-            thresholdSearchMatrix = max_cols
+            thresholdSearchMatrix = max_cols/4
+        print("Dimensions : " + str(arrCloudOnly.shape))
+        logger.info("Dimensions : " + str(arrCloudOnly.shape))
         y =0
         for m,n in arrCloudOnly:
             DN_value_optical_image = arrRadar[m,n] #Get DN value from radar image
@@ -254,7 +257,7 @@ def interpolate():
             ## Currently x = 100 ad is paased as an argument
             ## The radar image to search is the one we have excluded the cloudy pixels
             ## Return the cell row and column
-            returnList = makeSpiralSearchinMatrix(arrRadar,m,n,int(thresholdSearchMatrix),DN_value_optical_image,arrCloud)# for now the threshold is 3 pixels
+            returnList = SpiralSearchMatrix.makeSpiralSearchinMatrix(arrRadar,m,n,int(thresholdSearchMatrix),DN_value_optical_image,arrCloud)# for now the threshold is 3 pixels
             if returnList[0] !=0:
                 #Replace current cloud DN value of optical image and the band images to new DN value for the returned q,r row
                 arrOptical[m,n] = arrOptical[returnList[1],returnList[2]]
@@ -273,58 +276,93 @@ def interpolate():
                 arrBand4[m,n] = float(_nodatavalue)
             y = y+1
             print(y)
-        print(datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
-        logger.info(datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
-
+        logger.info("End: "+datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
+        print("End: "+datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
+        
         #Write cloud free raster file to disk
         rows = arrOptical.shape[0] #Original rows
         cols = arrOptical.shape[1] #Original cols
         trans = opticalImage.GetGeoTransform() #Get transformation information from the original file
         proj = opticalImage.GetProjection() #Get Projection Information
-        nodatav = opticalImage.GetRasterBand(1).GetNoDataValue() # Get No Data Value
+        nodatav = float(_nodatavalue) # Get No Data Value
         outputRasterFile = os.path.join(_path, _TRRIFolder, _CloudFreeImage+"_"+TRRIFilename)#output file
         Utilities.checkIfDirectoryExists(os.path.join(_path, _TRRIFolder)) #Check if directory exists
         WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,arrOptical,outputRasterFile) #Write file to disk
-
+        #Read the image again
+        #Execute fillnodata  
+        opticalImage = getImage(outputRasterFile,False)
+        channelband = opticalImage.GetRasterBand(1)        
+        result = gdal.FillNodata(targetBand = channelband, maskBand = None, \
+                                 maxSearchDist = int(_maxSearchDist), smoothingIterations =0)
+        result=channelband=arrOptical=cloudImage=opticalImage=None #Flush out the results to disk
+                                                     
         #Write cloudfree band1 image
         rows = arrBand1.shape[0] #Original rows
         cols = arrBand1.shape[1] #Original cols
         trans = band1Image.GetGeoTransform() #Get transformation information from the original file
         proj = band1Image.GetProjection() #Get Projection Information
-        nodatav = band1Image.GetRasterBand(1).GetNoDataValue() # Get No Data Value
+        nodatav = float(_nodatavalue) # Get No Data Value
         outputRasterFile = os.path.join(_path, _TRRIFolder, _band1Filename)#output file
         Utilities.checkIfDirectoryExists(os.path.join(_path, _TRRIFolder)) #Check if directory exists
         WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,arrBand1,outputRasterFile) #Write file to disk
-        
+        #Read the image again
+        #Execute fillnodata  
+        opticalImage = getImage(outputRasterFile,False)
+        channelband = opticalImage.GetRasterBand(1)        
+        result = gdal.FillNodata(targetBand = channelband, maskBand = None, \
+                                 maxSearchDist = int(_maxSearchDist), smoothingIterations =0)
+        result=channelband=arrBand1=band1Image=opticalImage=None #Flush out the results to disk
+                                                     
         #Write cloudfree band2 image
         rows = arrBand2.shape[0] #Original rows
         cols = arrBand2.shape[1] #Original cols
         trans = band2Image.GetGeoTransform() #Get transformation information from the original file
         proj = band2Image.GetProjection() #Get Projection Information
-        nodatav = band2Image.GetRasterBand(1).GetNoDataValue() # Get No Data Value
+        nodatav = float(_nodatavalue) # Get No Data Value
         outputRasterFile = os.path.join(_path, _TRRIFolder, _band2Filename)#output file
         Utilities.checkIfDirectoryExists(os.path.join(_path, _TRRIFolder)) #Check if directory exists
         WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,arrBand2,outputRasterFile) #Write file to disk
-
+        #Read the image again
+        #Execute fillnodata  
+        opticalImage = getImage(outputRasterFile,False)
+        channelband = opticalImage.GetRasterBand(1)        
+        result = gdal.FillNodata(targetBand = channelband, maskBand = None, \
+                                 maxSearchDist = int(_maxSearchDist), smoothingIterations =0)
+        result=channelband=arrBand2=band2Image=opticalImage=None #Flush out the results to disk
+                                                     
         #Write cloudfree band3 image
         rows = arrBand3.shape[0] #Original rows
         cols = arrBand3.shape[1] #Original cols
         trans = band3Image.GetGeoTransform() #Get transformation information from the original file
         proj = band3Image.GetProjection() #Get Projection Information
-        nodatav = band3Image.GetRasterBand(1).GetNoDataValue() # Get No Data Value
+        nodatav = float(_nodatavalue) # Get No Data Value
         outputRasterFile = os.path.join(_path, _TRRIFolder, _band3Filename)#output file
         Utilities.checkIfDirectoryExists(os.path.join(_path, _TRRIFolder)) #Check if directory exists
         WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,arrBand3,outputRasterFile) #Write file to disk
-
+        #Read the image again
+        #Execute fillnodata  
+        opticalImage = getImage(outputRasterFile,False)
+        channelband = opticalImage.GetRasterBand(1)        
+        result = gdal.FillNodata(targetBand = channelband, maskBand = None, \
+                                 maxSearchDist = int(_maxSearchDist), smoothingIterations =0)
+        result=channelband=arrBand3=band3Image=opticalImage=None #Flush out the results to disk
+                                                     
         #Write cloudfree band4 image
         rows = arrBand4.shape[0] #Original rows
         cols = arrBand4.shape[1] #Original cols
         trans = band4Image.GetGeoTransform() #Get transformation information from the original file
         proj = band4Image.GetProjection() #Get Projection Information
-        nodatav = band4Image.GetRasterBand(1).GetNoDataValue() # Get No Data Value
+        nodatav = float(_nodatavalue) # Get No Data Value
         outputRasterFile = os.path.join(_path, _TRRIFolder, _band4Filename)#output file
         Utilities.checkIfDirectoryExists(os.path.join(_path, _TRRIFolder)) #Check if directory exists
         WriteRaster.writeTIFF(rows,cols,trans,proj,nodatav,arrBand4,outputRasterFile) #Write file to disk
+        #Read the image again
+        #Execute fillnodata  
+        opticalImage = getImage(outputRasterFile,False)
+        channelband = opticalImage.GetRasterBand(1)        
+        result = gdal.FillNodata(targetBand = channelband, maskBand = None, \
+                                 maxSearchDist = int(_maxSearchDist), smoothingIterations =0)
+        result=channelband=arrBand4=band4Image=opticalImage=None #Flush out the results to disk
 
         logger.info( "Completed Cloud Removal raster analysis")
                        
@@ -339,115 +377,6 @@ def interpolate():
 
     return ""
 
-def makeSpiralSearchinMatrix(arrRadar,row,col,length,DN_value_optical_image,arrCloud):
-    ##DNValue,Row,Col
-    returnList=[0,0,0]
-    try:
-        threshold = length - 1;
-        rowStart=row-threshold;
-        rowLength=(2 * threshold) + rowStart;
-
-        colStart=col - threshold
-        colLength = (2 * threshold) + colStart;
-
-        DN_value = 0 #Initialize variable
-        breakAgain = 0 # Variable determines if there is need to break again from the outer
-                        # While loop
-        while (rowStart <= rowLength and  colStart <= colLength):
-            try:
-                #Top Boundary
-                i = rowStart
-                while(i<= colLength):
-                    DN_value = arrRadar.item(rowStart,i)
-                    #print DN_value
-                    if(row != rowStart and col != i):
-                        if(DN_value==DN_value_optical_image and rowStart>=0 and i>=0 ):
-                            returnList[0]=DN_value
-                            returnList[1]=rowStart
-                            returnList[2]=i
-                            if arrCloud[rowStart,i]!=1:#Check we are not replacing with another Cloud pixel
-                                breakAgain =1
-                                break
-                    i+=1
-                if (breakAgain ==1):
-                    break
-
-                #Right Boundary
-                j = rowStart + 1
-                while(j<= colLength):
-                    DN_value = arrRadar.item(j,colLength)
-                    #print DN_value
-                    if( row!= j and col != colLength):
-                        if(DN_value==DN_value_optical_image and j>=0 and colLength>=0):
-                            returnList[0]=DN_value
-                            returnList[1]=j
-                            returnList[2]=colLength
-                            if arrCloud[j,colLength]!=1:#Check we are not replacing with another Cloud pixel
-                                breakAgain =1
-                                break
-                    j+=1
-                if (breakAgain ==1):
-                    break                
-
-                #Bottom Boundary
-                if(rowStart+1 <= rowLength ):
-                    k = colLength-1
-                    while(k >= colStart):
-                        DN_value = arrRadar.item(rowLength,k)
-                        #print DN_value
-                        if( row!= rowLength and col != k):
-                            if(DN_value==DN_value_optical_image and rowLength>=0 and k >=0):
-                                returnList[0]=DN_value
-                                returnList[1]=rowLength
-                                returnList[2]=k
-                                if arrCloud[rowLength,k]!=1:#Check we are not replacing with another Cloud pixel
-                                    breakAgain = 1
-                                    break
-                        k-=1
-                        
-                if (breakAgain ==1):
-                    break
-                
-                #Left boundary
-                if(colStart+1 <= colLength ):
-                    k = rowLength-1
-                    while(k > rowStart):
-                        DN_value = arrRadar.item(k,colStart)
-                        #print DN_value
-                        if( row!= k and col != colStart):
-                            if(DN_value==DN_value_optical_image and k >=0 and colStart>=0):
-                                returnList[0]=DN_value
-                                returnList[1]=k
-                                returnList[2]=colStart
-                                if arrCloud[k,colStart]!=1:#Check we are not replacing with another Cloud pixel                                
-                                    breakAgain = 1
-                                    break
-                        k-=1
-                        
-                if (breakAgain ==1):
-                    break
-            except:
-                ## Return any Python specific errors and any error returned
-                tb = sys.exc_info()[2]
-                tbinfo = traceback.format_tb(tb)[0]
-                pymsg = "PYTHON ERRORS:\n Main FunctionTraceback Info:\n" + tbinfo + "\nError Info:\n    " + \
-                        str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
-                ##Write to the error log file
-                logger_error.info( pymsg)
-            rowStart+=1
-            rowLength-=1
-            colStart+=1
-            colLength-=1
-    except:
-        ## Return any Python specific errors and any error returned
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-        pymsg = "PYTHON ERRORS:\n Main FunctionTraceback Info:\n" + tbinfo + "\nError Info:\n    " + \
-                str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
-        ##Write to the error log file
-        logger_error.info( pymsg)
-
-    return returnList
 
 def main():
     pass

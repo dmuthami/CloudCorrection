@@ -56,7 +56,7 @@ Configurations.setParameters(configFileLocation)
 Configurations.setWorkspace()
 
 
-def writeTIFF(rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile):
+def writeTIFF(rows,cols,trans,proj,nodatav,npArray,outputRasterFile):
     try: 
         
         output_raster = gdal.GetDriverByName('GTiff').Create(outputRasterFile,cols, rows, 1
@@ -73,7 +73,7 @@ def writeTIFF(rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile):
         output_raster.SetProjection( proj )   # Exports the coordinate system
                                               # to the file
 
-        output_raster.GetRasterBand(1).WriteArray(npReflectance)   # Writes my array to the raster
+        output_raster.GetRasterBand(1).WriteArray(npArray)   # Writes my array to the raster
 
         output_raster = None
     except:
@@ -81,7 +81,7 @@ def writeTIFF(rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile):
         tb = sys.exc_info()[2]
         tbinfo = traceback.format_tb(tb)[0]
 
-        pymsg = "PYTHON ERRORS:\n  Function writeTIFF(rows,cols,trans,proj,nodatav,npReflectance,fileName,outputDirectory) \n" + tbinfo + "\nError Info:\n    " + \
+        pymsg = "PYTHON ERRORS:\n  Function writeTIFF(rows,cols,trans,proj,nodatav,npArray,fileName,outputDirectory) \n" + tbinfo + "\nError Info:\n    " + \
                 str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
         ##Write to the error log file
         logger_error.info( pymsg)
@@ -89,7 +89,7 @@ def writeTIFF(rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile):
     return ""
 
 #Writes as int
-def writeTIFF2(rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile):
+def writeTIFF2(rows,cols,trans,proj,nodatav,npArray,outputRasterFile):
     try: 
         
         output_raster = gdal.GetDriverByName('GTiff').Create(outputRasterFile,cols, rows, 1
@@ -106,7 +106,7 @@ def writeTIFF2(rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile):
         output_raster.SetProjection( proj )   # Exports the coordinate system
                                               # to the file
 
-        output_raster.GetRasterBand(1).WriteArray(npReflectance)   # Writes my array to the raster
+        output_raster.GetRasterBand(1).WriteArray(npArray)   # Writes my array to the raster
 
         output_raster = None
     except:
@@ -114,7 +114,7 @@ def writeTIFF2(rows,cols,trans,proj,nodatav,npReflectance,outputRasterFile):
         tb = sys.exc_info()[2]
         tbinfo = traceback.format_tb(tb)[0]
 
-        pymsg = "PYTHON ERRORS:\n  Function writeTIFF2(rows,cols,trans,proj,nodatav,npReflectance,fileName,outputDirectory) \n" + tbinfo + "\nError Info:\n    " + \
+        pymsg = "PYTHON ERRORS:\n  Function writeTIFF2(rows,cols,trans,proj,nodatav,npArray,fileName,outputDirectory) \n" + tbinfo + "\nError Info:\n    " + \
                 str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
         ##Write to the error log file
         logger_error.info( pymsg)
