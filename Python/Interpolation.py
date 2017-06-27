@@ -234,11 +234,10 @@ def interpolate():
         arrBand3 = getNumpyArray(band3Image)
         arrBand4 = getNumpyArray(band4Image)
 
-        #Replace cloud pixels with those that are not cloudy from the radar image
-        logger.info("Start: "+datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
-        print("Start: "+datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
-        #Loop through the cloud cells only
+        #Record start time of interpolation method
+        start = datetime.now().strftime("-%y-%m-%d_%H-%M-%S")
         
+        #Loop through the cloud cells only     
         arrCloudOnly = np.argwhere(arrCloud==1)
         _tuple = arrCloud.shape
         max_rows=_tuple[0]
@@ -276,8 +275,13 @@ def interpolate():
                 arrBand4[m,n] = float(_nodatavalue)
             y = y+1
             print(y)
-        logger.info("End: "+datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
-        print("End: "+datetime.now().strftime("-%y-%m-%d_%H-%M-%S"))
+        end = datetime.now().strftime("-%y-%m-%d_%H-%M-%S")
+        logger.info("Total Number of visited cloud cells : " +str(y))
+        print("Total Number of visited cloud cells : " +str(y))
+        print("StartTime : "+str(start))
+        print("End Time: "+str(end))
+        logger.info("Start Time: "+str(start))
+        logger.info("End Time: "+str(end))       
         
         #Write cloud free raster file to disk
         rows = arrOptical.shape[0] #Original rows
